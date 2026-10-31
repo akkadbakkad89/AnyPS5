@@ -16,6 +16,7 @@
 namespace {
 
 constexpr std::int32_t SCE_PSML_ERROR_NOT_INITIALIZED = static_cast<std::int32_t>(0x8A810001);
+constexpr std::int32_t SCE_PSML_ERROR_ALREADY_INITIALIZED = static_cast<std::int32_t>(0x8A810002);
 constexpr std::int32_t SCE_PSML_ERROR_INVALID_ARGUMENT = static_cast<std::int32_t>(0x8A810005);
 constexpr std::int32_t SCE_PSML_ERROR_NULL_OUTPUT = static_cast<std::int32_t>(0x8A810009);
 constexpr std::int32_t SCE_PSML_ERROR_UNSUPPORTED_TYPE = static_cast<std::int32_t>(0x8A81000D);
@@ -79,6 +80,14 @@ std::unordered_map<void*, MfsrObject*> g_mfsrObjects;
 
 void RequireMfsr(bool condition, const char* function, const char* what) {
  if (!condition) throw std::runtime_error(std::string(function) + ": " + what);
+}
+
+std::uint64_t MfsrSharedRequirementBlocks(std::uint32_t type) {
+ constexpr std::uint64_t sizes[] = {0x7C00000000, 0x100000000, 0x8A6C003E00000004};
+ std::uint64_t blocks = (sizes[type] + MfsrBlockBytes - 1) / MfsrBlockBytes;
+ const std::uint64_t addend = sizes[type] + (type == 1 ? 0x40000000 : 0x10000000);
+ if (addend % MfsrBlockBytes == 0) blocks += (0x600000 + MfsrBlockBytes - 1) / MfsrBlockBytes;
+ return blocks;
 }
 
 void RequireBlocks(const MfsrBlock* blocks, std::uint64_t blockCount, std::uint64_t requiredCount, const char* function) {
@@ -158,7 +167,8 @@ std::int32_t APS5_VABI scePsmlMfsrGetDispatchMfsrPacket1100(void* context, void*
 
 std::int32_t APS5_VABI scePsmlMfsrInit() {
  if (sceKernelIsTrinityMode() == 0) return SCE_PSML_ERROR_UNSUPPORTED_CONSOLE;
- NotImplemented_nid_no_patch(__func__);
+ if (g_mfsrInitialized) return SCE_PSML_ERROR_ALREADY_INITIALIZED;
+ g_mfsrInitialized = true;
  return 0;
 }
 
@@ -168,9 +178,8 @@ std::int32_t APS5_VABI scePsmlMfsrGetSharedResourcesInitRequirement(MfsrRequirem
  if (param->type != 0) {
   const bool gated = (param->type == 1 && (g_mfsrFeatureFlags.load() & 1u) != 0) || (param->type == 2 && (g_mfsrFeatureFlags.load() & 2u) != 0);
   if (!gated) return SCE_PSML_ERROR_UNSUPPORTED_TYPE;
-  NotImplemented_nid_no_patch(__func__);
  }
- *requirement = {MfsrBlockBytes, MfsrBlockBytes, MfsrSharedBlockCount};
+ *requirement = {MfsrBlockBytes, MfsrBlockBytes, MfsrSharedRequirementBlocks(param->type)};
  return 0;
 }
 
@@ -281,11 +290,13 @@ std::int32_t APS5_VABI scePsmlMfsrIsCaptureInProgress(void* context) {
 }
 
 std::int32_t APS5_VABI scePsmlMfsrGetDispatchMfsrPacket1000(void* context, void* commandBuffer, const void* param) {
- (void)context;
- (void)commandBuffer;
  (void)param;
- if (g_mfsrInitialized) NotImplemented_nid_no_patch(__func__);
- return SCE_PSML_ERROR_NOT_INITIALIZED;
+ if (!g_mfsrInitialized) return SCE_PSML_ERROR_NOT_INITIALIZED;
+ MfsrObject object;
+ if (!FindMfsrObject(context, &object)) return SCE_PSML_ERROR_INVALID_ARGUMENT;
+ if (commandBuffer == nullptr) return SCE_PSML_ERROR_NULL_OUTPUT;
+ NotImplemented_nid_no_patch(__func__);
+ return 0;
 }
 
 std::int32_t APS5_VABI scePsmlMfsrGetDispatchMfsrPacket900(void* context, void* commandBuffer, const void* param) {
