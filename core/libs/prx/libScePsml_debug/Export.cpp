@@ -16,11 +16,11 @@
 namespace {
 
 constexpr std::int32_t SCE_PSML_ERROR_NOT_INITIALIZED = static_cast<std::int32_t>(0x8A810001);
-constexpr std::int32_t SCE_PSML_ERROR_ALREADY_INITIALIZED = static_cast<std::int32_t>(0x8A810002);
 constexpr std::int32_t SCE_PSML_ERROR_INVALID_ARGUMENT = static_cast<std::int32_t>(0x8A810005);
 constexpr std::int32_t SCE_PSML_ERROR_NULL_OUTPUT = static_cast<std::int32_t>(0x8A810009);
 constexpr std::int32_t SCE_PSML_ERROR_UNSUPPORTED_TYPE = static_cast<std::int32_t>(0x8A81000D);
 constexpr std::int32_t SCE_PSML_ERROR_UNSUPPORTED_CONSOLE = static_cast<std::int32_t>(0x8A810012);
+constexpr std::int32_t SCE_PSML_ERROR_SYNC_SUBMIT = static_cast<std::int32_t>(0x8A810016);
 constexpr std::int32_t SCE_PSML_ERROR_UNSUPPORTED_RESOLUTION = static_cast<std::int32_t>(0x8A810013);
 constexpr std::int32_t SCE_PSML_ERROR_SHARED_RESOURCES_BUSY = static_cast<std::int32_t>(0x8A810015);
 constexpr std::int32_t Mfsr2ErrorNotInitialized = static_cast<std::int32_t>(0x8A8A0001);
@@ -73,6 +73,8 @@ struct MfsrObject {
 };
 
 std::atomic<bool> g_mfsrInitialized{false};
+std::atomic<bool> g_mfsrLowLatencySubmit{false};
+std::atomic<bool> g_mfsrSyncSubmit{false};
 std::atomic<std::uint8_t> g_mfsrSpecularAA{0};
 std::atomic<std::uint32_t> g_mfsrFeatureFlags{0};
 std::mutex g_mfsrMutex;
@@ -80,14 +82,6 @@ std::unordered_map<void*, MfsrObject*> g_mfsrObjects;
 
 void RequireMfsr(bool condition, const char* function, const char* what) {
  if (!condition) throw std::runtime_error(std::string(function) + ": " + what);
-}
-
-std::uint64_t MfsrSharedRequirementBlocks(std::uint32_t type) {
- constexpr std::uint64_t sizes[] = {0x7C00000000, 0x100000000, 0x8A6C003E00000004};
- std::uint64_t blocks = (sizes[type] + MfsrBlockBytes - 1) / MfsrBlockBytes;
- const std::uint64_t addend = sizes[type] + (type == 1 ? 0x40000000 : 0x10000000);
- if (addend % MfsrBlockBytes == 0) blocks += (0x600000 + MfsrBlockBytes - 1) / MfsrBlockBytes;
- return blocks;
 }
 
 void RequireBlocks(const MfsrBlock* blocks, std::uint64_t blockCount, std::uint64_t requiredCount, const char* function) {
@@ -167,8 +161,7 @@ std::int32_t APS5_VABI scePsmlMfsrGetDispatchMfsrPacket1100(void* context, void*
 
 std::int32_t APS5_VABI scePsmlMfsrInit() {
  if (sceKernelIsTrinityMode() == 0) return SCE_PSML_ERROR_UNSUPPORTED_CONSOLE;
- if (g_mfsrInitialized) return SCE_PSML_ERROR_ALREADY_INITIALIZED;
- g_mfsrInitialized = true;
+ NotImplemented_nid_no_patch(__func__);
  return 0;
 }
 
@@ -178,8 +171,9 @@ std::int32_t APS5_VABI scePsmlMfsrGetSharedResourcesInitRequirement(MfsrRequirem
  if (param->type != 0) {
   const bool gated = (param->type == 1 && (g_mfsrFeatureFlags.load() & 1u) != 0) || (param->type == 2 && (g_mfsrFeatureFlags.load() & 2u) != 0);
   if (!gated) return SCE_PSML_ERROR_UNSUPPORTED_TYPE;
+  NotImplemented_nid_no_patch(__func__);
  }
- *requirement = {MfsrBlockBytes, MfsrBlockBytes, MfsrSharedRequirementBlocks(param->type)};
+ *requirement = {MfsrBlockBytes, MfsrBlockBytes, MfsrSharedBlockCount};
  return 0;
 }
 
@@ -295,6 +289,7 @@ std::int32_t APS5_VABI scePsmlMfsrGetDispatchMfsrPacket1000(void* context, void*
  MfsrObject object;
  if (!FindMfsrObject(context, &object)) return SCE_PSML_ERROR_INVALID_ARGUMENT;
  if (commandBuffer == nullptr) return SCE_PSML_ERROR_NULL_OUTPUT;
+ if (!g_mfsrLowLatencySubmit.load() && g_mfsrSyncSubmit.load()) return SCE_PSML_ERROR_SYNC_SUBMIT;
  NotImplemented_nid_no_patch(__func__);
  return 0;
 }
