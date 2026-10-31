@@ -189,8 +189,8 @@ void testUpdate0100Mapping() {
 
     regs = filled();
     check(sceAgcUpdateInterpolantMapping_0100(regs.data(), &vs, &ps) == 0, "_0100 update mapping failed");
-    check(regs[0].value == 0x00000525u, "_0100 update does not encode default value 2 as 1");
-    check(regs[1].value == 0x01380207u, "_0100 update does not encode default value 1 as 2");
+    check(regs[0].value == 0x00000625u, "_0100 update does not encode default value 2");
+    check(regs[1].value == 0x01380107u, "_0100 update does not encode default value 1");
     check(regs[2].value == 0x02580020u, "_0100 unmatched interpolant update changed");
     check(regs[3].value == 0x03680709u, "_0100 full f16 interpolant update changed");
     for (std::uint32_t i = 0; i < inputs.size(); ++i) {

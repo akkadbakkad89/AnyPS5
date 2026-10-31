@@ -59,9 +59,8 @@ std::uint32_t CreateInterpolantValueFlatDefault(std::uint32_t psWord, const Shad
 }
 
 std::uint32_t ApplyInterpolantDefaultValue0100(std::uint32_t value, std::uint32_t psWord) {
-    constexpr std::uint32_t encoded[4] = {0u, 2u, 1u, 3u};
     value &= ~0x00000300u;
-    value |= encoded[(psWord >> 28u) & 0x3u] << 8u;
+    value |= ((psWord >> 28u) & 0x3u) << 8u;
     return value;
 }
 
