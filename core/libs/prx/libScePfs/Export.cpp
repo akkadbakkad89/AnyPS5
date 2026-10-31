@@ -90,25 +90,33 @@ int APS5_VABI scePfsGetPreadBlockRange(std::uint64_t size, std::uint64_t offset,
     if ((version & 0xfffe) != 2) return UnsupportedFormat;
     const std::uint64_t total = layout->uncompressedSize;
     if (version == 3) {
-        if (total < offset || total < size || offset + size > total) return OutOfRange;
+        if (offset > total || size > total - offset) return OutOfRange;
+        const std::uint64_t end = offset + size;
+        const std::uint64_t firstIndex = offset >> 0x12;
+        const std::uint64_t lastIndex = end ? (end - 1) >> 0x12 : 0;
+        if (firstIndex > 0xffffffffULL || lastIndex > 0xffffffffULL) return OutOfRange;
         const auto* entries = static_cast<const PfsIndexEntry*>(blockTable);
-        const PfsIndexEntry* cursor = entries + (offset >> 0x12);
-        std::uint32_t first = static_cast<std::uint32_t>(offset >> 0x12) - 1;
+        const PfsIndexEntry* cursor = entries + firstIndex;
+        std::uint32_t first = static_cast<std::uint32_t>(firstIndex) - 1;
         std::uint64_t found;
         do {
             found = cursor->words[1] & OffsetMask44;
             ++first;
             ++cursor;
         } while (found < offset);
-        const std::uint64_t end = offset + size;
-        cursor = entries + ((end + 0x3ffff) >> 0x12) - 1;
-        std::uint32_t last = static_cast<std::uint32_t>((end + 0x3ffff) >> 0x12) - 2;
-        std::uint64_t endFound;
-        do {
-            endFound = cursor->words[1] & OffsetMask44;
-            ++last;
-            ++cursor;
-        } while (endFound < end);
+        std::uint32_t last;
+        std::uint64_t endFound = 0;
+        if (end) {
+            cursor = entries + lastIndex;
+            last = static_cast<std::uint32_t>(lastIndex) - 1;
+            do {
+                endFound = cursor->words[1] & OffsetMask44;
+                ++last;
+                ++cursor;
+            } while (endFound < end);
+        } else {
+            last = 0xffffffff;
+        }
         first -= found != offset;
         last -= endFound != offset;
         *firstBlockOut = first;
@@ -116,9 +124,12 @@ int APS5_VABI scePfsGetPreadBlockRange(std::uint64_t size, std::uint64_t offset,
         return 0;
     }
     if (layout->layoutTag != 2) return UnsupportedLayout;
-    if (total < offset || total < size || offset + size > total) return OutOfRange;
+    if (offset > total || size > total - offset) return OutOfRange;
+    const std::uint64_t end = offset + size;
+    const std::uint64_t lastIndex = end ? (end - 1) >> 0x12 : 0xffffffffULL;
+    if (lastIndex > 0xffffffffULL) return OutOfRange;
     *firstBlockOut = static_cast<std::uint32_t>(offset >> 0x12);
-    *lastBlockOut = static_cast<std::uint32_t>(((offset + size + 0x3ffff) >> 0x12) - 1);
+    *lastBlockOut = static_cast<std::uint32_t>(lastIndex);
     return 0;
 }
 

@@ -5,8 +5,6 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <stdexcept>
-#include <string>
 
 namespace {
 
@@ -47,16 +45,6 @@ void Fill(T& object, std::uint8_t value) {
 
 void FillBytes(void* object, std::size_t bytes, std::uint8_t value) {
     std::memset(object, value, bytes);
-}
-
-template <typename TCall>
-bool ReportsNotImplemented(const char* name, TCall call) {
-    try {
-        call();
-    } catch (const std::runtime_error& error) {
-        return std::string(error.what()) == std::string(name) + " not implemented";
-    }
-    return false;
 }
 
 PfsHeader HeaderV2(std::uint32_t blocks, std::uint64_t total, std::uint64_t tableOffset) {
@@ -170,6 +158,16 @@ void PreadBlockRangeV2() {
     Require(scePfsGetPreadBlockRange(0x80001, 0, &first, &last, &header, table) == OutOfRange);
     Require(scePfsGetPreadBlockRange(0x1000, 0x80000, &first, &last, &header, table) == OutOfRange);
     Require(scePfsGetPreadBlockRange(0x40001, 0x40000, &first, &last, &header, table) == OutOfRange);
+    header.uncompressedSize = 0xffffffffffffffffULL;
+    Require(scePfsGetPreadBlockRange(2, 0xfffffffffffffffeULL, &first, &last, &header, table) == OutOfRange);
+    Require(scePfsGetPreadBlockRange(0x40000, 0xfffffffffffe0000ULL, &first, &last, &header, table) == OutOfRange);
+    Require(scePfsGetPreadBlockRange(0, 0xffffffffffffffffULL, &first, &last, &header, table) == OutOfRange);
+    header.uncompressedSize = 0x10000000000000ULL;
+    Require(scePfsGetPreadBlockRange(0x10000000000000ULL, 0, &first, &last, &header, table) == OutOfRange);
+    header.uncompressedSize = 0x4000000000000ULL;
+    Require(scePfsGetPreadBlockRange(0x4000000000000ULL, 0, &first, &last, &header, table) == 0);
+    Require(first == 0 && last == 0xffffffff);
+    header.uncompressedSize = 0x80000;
     Require(scePfsGetPreadBlockRange(0x1000, 0, nullptr, &last, &header, table) == InvalidArgument);
     Require(scePfsGetPreadBlockRange(0x1000, 0, &first, nullptr, &header, table) == InvalidArgument);
     Require(scePfsGetPreadBlockRange(0x1000, 0, &first, &last, nullptr, table) == InvalidArgument);
@@ -197,6 +195,11 @@ void PreadBlockRangeV3() {
     Require(scePfsGetPreadBlockRange(0x30001, 0x1ffff, &first, &last, &header, table) == 0);
     Require(first == 0 && last == 2);
     Require(scePfsGetPreadBlockRange(0x80001, 0, &first, &last, &header, table) == OutOfRange);
+    header.uncompressedSize = 0xffffffffffffffffULL;
+    Require(scePfsGetPreadBlockRange(2, 0xfffffffffffffffeULL, &first, &last, &header, table) == OutOfRange);
+    Require(scePfsGetPreadBlockRange(0x40000, 0xfffffffffffe0000ULL, &first, &last, &header, table) == OutOfRange);
+    header.uncompressedSize = 0x10000000000000ULL;
+    Require(scePfsGetPreadBlockRange(0x10000000000000ULL, 0, &first, &last, &header, table) == OutOfRange);
 }
 
 void SingleBlockReadCommandV2() {
@@ -322,16 +325,6 @@ void ValidateV3() {
     Require(scePfsValidate(&image, 2) == UnsupportedFormat);
 }
 
-void PreadStub() {
-    PfsHeader header = HeaderV2(4, 0x80000, 0x200);
-    Require(ReportsNotImplemented("scePfsPread", [&header] {
-        scePfsPread(nullptr, 0x1000, 0, &header, nullptr);
-    }));
-    Require(ReportsNotImplemented("scePfsPreadDecompressBlock", [] {
-        scePfsPreadDecompressBlock();
-    }));
-}
-
 }
 
 int main() {
@@ -347,6 +340,5 @@ int main() {
     Validate();
     ValidateV2Table();
     ValidateV3();
-    PreadStub();
     return 0;
 }
