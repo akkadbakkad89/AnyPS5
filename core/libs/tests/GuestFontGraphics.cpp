@@ -306,12 +306,6 @@ struct DrawupFixture {
     ~DrawupFixture() { scePthreadMutexDestroy(&mutex); }
 };
 
-void RequireNoCallback(int result, int error) {
-    const int before = g_errorCount;
-    Require(result == error);
-    Require(g_errorCount == before);
-}
-
 void DrawupTextureRecords() {
     {
         DrawupFixture f;
@@ -342,8 +336,9 @@ void DrawupTextureRecords() {
         f.frame.error = 0;
         f.frame.object = &f.object;
         f.frame.sequence = 0xffffffffu;
-        RequireNoCallback(sceFontGraphicsDrawupFillTextureImageObject(frame, f.descriptor, 0x100, &out, 0.0f, 0.0f, 8.0f, 8.0f), Sealed);
-        Require(f.frame.error == 0);
+        RequireError(sceFontGraphicsDrawupFillTextureImageObject(frame, f.descriptor, 0x100, &out, 0.0f, 0.0f, 8.0f, 8.0f), Sealed);
+        Require(f.frame.error == Sealed);
+        f.frame.error = 0;
         f.frame.sequence = 0;
         f.owner.pool = nullptr;
         RequireError(sceFontGraphicsDrawupFillTextureImageObject(frame, f.descriptor, 0x100, &out, 0.0f, 0.0f, 8.0f, 8.0f), NoRecordSpace);
@@ -390,7 +385,7 @@ void DrawupTextureRecords() {
         auto* record = static_cast<TestDrawupRecord*>(out);
         Require(record->type == 0x50 && record->sizeTag == 0x80 && record->mode == 0x200);
         Require(record->sequence == 0 && record->next == nullptr && record->state == 0);
-        Require(record->params[0] == (0x400 | 0x2000) && record->params[1] == (4 | 0x20));
+        Require(record->params[0] == (0x400 | 0x3000) && record->params[1] == (4 | 0x20));
         auto* dims = reinterpret_cast<const std::uint8_t*>(&record->params[2]);
         Require(dims[0] == 3 && dims[1] == 7);
         Require(std::memcmp(record->payload, f.descriptor, 0x200) == 0);
@@ -404,9 +399,14 @@ void DrawupTextureRecords() {
         f.frame.error = 0;
         RequireError(sceFontGraphicsDrawupFillTexturePatternObject(frame, f.descriptor, 0x100, 0, 0, 4, 1, 2, 0x101, &out), InvalidParameter);
         f.frame.error = 0;
+        f.frame.sequence = 0xffffffffu;
+        RequireError(sceFontGraphicsDrawupFillTexturePatternObject(frame, f.descriptor, 0x100, 0, 0, 4, 1, 2, 8, &out), Sealed);
+        Require(f.frame.error == Sealed);
+        f.frame.error = 0;
+        f.frame.sequence = 0;
         Require(sceFontGraphicsDrawupFillTexturePatternObject(frame, f.descriptor, 0, 5, 4, 4, 1, 2, 8, &out) == 0);
         record = static_cast<TestDrawupRecord*>(out);
-        Require(record->params[0] == 0x2000 && record->params[1] == 0x20);
+        Require(record->params[0] == 0x3000 && record->params[1] == 0x20);
         Require(sceFontGraphicsDrawupFillTexturePatternObject(frame, f.descriptor, 0, 4, 3, 256, 4, 3, 256, &out) == 0);
         record = static_cast<TestDrawupRecord*>(out);
         Require(record->params[0] == (0x200 | 0x2000) && record->params[1] == (3 | 0x30));
@@ -488,7 +488,9 @@ void DrawupFillRecords() {
         f.frame.object = &f.object;
         f.frame.error = 0;
         f.frame.sequence = 0xffffffff;
-        Require(sceFontGraphicsDrawupFillFlatColor(frame, color, &out) == Sealed);
+        RequireError(sceFontGraphicsDrawupFillFlatColor(frame, color, &out), Sealed);
+        Require(f.frame.error == Sealed);
+        f.frame.error = 0;
         f.frame.sequence = 1;
     }
     {
@@ -528,6 +530,11 @@ void DrawupFillRecords() {
         f.frame.error = 0;
         RequireError(sceFontGraphicsDrawupFillLinearGradient(frame, 2, c1, c2, nullptr, 2.0f, 4.0f, 1.0f, 2.0f, 3.0f, 4.0f), InvalidParameter);
         f.frame.error = 0;
+        f.frame.sequence = 0xffffffff;
+        RequireError(sceFontGraphicsDrawupFillLinearGradient(frame, 2, c1, c2, &out, 2.0f, 4.0f, 1.0f, 2.0f, 3.0f, 4.0f), Sealed);
+        Require(f.frame.error == Sealed);
+        f.frame.error = 0;
+        f.frame.sequence = 2;
     }
     {
         DrawupFixture f;
@@ -544,6 +551,25 @@ void DrawupFillRecords() {
         Require(values[0] == 0.0f && values[1] == 0.0f && values[2] == 1.0f && values[3] == 1.0f);
         Require(record->params[6] == 0 && record->params[7] == 0);
         Require(AllBytes(*record, 0x40, 0x80, 0xa5));
+    }
+    {
+        DrawupFixture f;
+        auto* frame = reinterpret_cast<FontGraphicsFrame*>(&f.frame);
+        void* out = nullptr;
+        f.nodes[0] = (2 << 1) | 1;
+        f.nodes[1] = 1;
+        f.nodes[2] = 4 << 1;
+        f.nodes[4] = TotalSlots << 1;
+        f.pool.entries[0].used = 2;
+        f.pool.used = 2;
+        f.pool.entries[0].scan = f.nodes + 2;
+        Require(sceFontGraphicsDrawupFillTexturePatternObject(frame, f.descriptor, 0x180, 0, 0, 1, 0, 0, 1, &out) == 0);
+        auto* record = static_cast<TestDrawupRecord*>(out);
+        Require(record == reinterpret_cast<TestDrawupRecord*>(f.memory + 4 * 0x80));
+        Require(f.nodes[2] == ((6 << 1) | 1) && f.nodes[3] == 1);
+        Require(f.nodes[4] == ((TotalSlots << 1) | 1) && f.nodes[5] == 1);
+        Require(f.nodes[6] == (TotalSlots << 1));
+        Require(f.pool.used == 6 && f.pool.entries[0].used == 6);
     }
 }
 
