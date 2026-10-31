@@ -227,7 +227,7 @@ FontDrawupRecord* DrawupPoolAllocate(FontDrawupPoolEntry* entry, std::uint32_t s
         nodes[end] = stopWord & ~1;
     }
     entry->used += slots;
-    return reinterpret_cast<FontDrawupRecord*>(entry->memory + start * entry->slotSize);
+    return reinterpret_cast<FontDrawupRecord*>(entry->memory + index * entry->slotSize);
 }
 
 void DrawupEnqueue(FontDrawupFrame* frame, FontDrawupRecord* record) {
@@ -592,7 +592,7 @@ int DrawupGradientRecord(FontGraphicsFrame* graphicsObject, std::uint32_t mode, 
     if (!frame->object)
         return DrawupRecordError(frame, FONT_GRAPHICS_ERROR_UNINITIALIZED);
     if (frame->sequence == DrawupPoolSealed)
-        return FONT_GRAPHICS_ERROR_SEALED;
+        return DrawupRecordError(frame, FONT_GRAPHICS_ERROR_SEALED);
     int error = 0;
     FontDrawupRecord* const record = DrawupAllocate(frame, 0, &error);
     if (!record) return error;
@@ -626,7 +626,7 @@ int GraphicsDrawupFillFlatColor(FontGraphicsFrame* graphicsObject, const void* c
     if (!frame->object)
         return DrawupRecordError(frame, FONT_GRAPHICS_ERROR_UNINITIALIZED);
     if (frame->sequence == DrawupPoolSealed)
-        return FONT_GRAPHICS_ERROR_SEALED;
+        return DrawupRecordError(frame, FONT_GRAPHICS_ERROR_SEALED);
     int error = 0;
     FontDrawupRecord* const record = DrawupAllocate(frame, 0, &error);
     if (!record) return error;
@@ -664,7 +664,7 @@ int GraphicsDrawupFillTextureImageObject(FontGraphicsFrame* graphicsObject, cons
     if (!frame->object)
         return DrawupRecordError(frame, FONT_GRAPHICS_ERROR_UNINITIALIZED);
     if (frame->sequence == DrawupPoolSealed)
-        return FONT_GRAPHICS_ERROR_SEALED;
+        return DrawupRecordError(frame, FONT_GRAPHICS_ERROR_SEALED);
     int error = 0;
     FontDrawupRecord* const record = DrawupAllocate(frame, mode, &error);
     if (!record) return error;
@@ -687,7 +687,7 @@ int GraphicsDrawupFillTexturePatternObject(FontGraphicsFrame* graphicsObject, co
         std::uint32_t option1, std::uint32_t option2, std::uint32_t dimension2, void** output) {
     constexpr std::uint32_t FormatBase[] = {0x100, 0x300, 0x400, 0x600, 0x200};
     constexpr std::uint32_t SelectBase[] = {4, 1, 2, 3};
-    constexpr std::uint32_t Option1Flags[] = {0x1000, 0x2000, 0x4000, 0x6000, 0x2000};
+    constexpr std::uint32_t Option1Flags[] = {0x1000, 0x3000, 0x4000, 0x6000, 0x2000};
     constexpr std::uint32_t Option2Flags[] = {0x40, 0x10, 0x20, 0x30};
     std::uint32_t formatWord = format < 5 ? FormatBase[format] : 0;
     if (option1 < 5) formatWord |= Option1Flags[option1];
@@ -704,7 +704,7 @@ int GraphicsDrawupFillTexturePatternObject(FontGraphicsFrame* graphicsObject, co
     if (!frame->object)
         return DrawupRecordError(frame, FONT_GRAPHICS_ERROR_UNINITIALIZED);
     if (frame->sequence == DrawupPoolSealed)
-        return FONT_GRAPHICS_ERROR_SEALED;
+        return DrawupRecordError(frame, FONT_GRAPHICS_ERROR_SEALED);
     int error = 0;
     FontDrawupRecord* const record = DrawupAllocate(frame, mode, &error);
     if (!record) return error;
