@@ -251,7 +251,7 @@ void Driver::learnPendingRelocation() {
                 word.high = program.userData[index + 1];
             }
             if ((variant.decodePointerWords >> index & 1u) != 0 && index + 1 < program.userData.size()) word.high = program.userData[index + 1];
-            const auto base = AlignedWord(program.userData[index]);
+            const auto base = (static_cast<std::uint64_t>(word.high) << 32) + AlignedWord(program.userData[index]);
             for (std::size_t run = 0; run < variant.runs.size() && run < variant.runBases.size(); ++run) {
                 if (variant.runBases[run] != static_cast<std::int8_t>(index)) continue;
                 word.reads.emplace_back(static_cast<std::int64_t>(variant.runs[run].first - base), static_cast<std::uint32_t>((variant.runs[run].second - variant.runs[run].first) / sizeof(std::uint32_t)));
