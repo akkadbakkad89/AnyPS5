@@ -107,6 +107,8 @@ struct DrawEntryCounters {
     std::array<std::uint64_t, 64> dataDiffWords{};
     std::uint64_t relocStages = 0, relocRefusedDecode = 0, relocRefusedFetch = 0;
     std::uint64_t relocShapes = 0, relocWords = 0, relocAliases = 0;
+    std::uint64_t relocLearnNull = 0, relocLearnMismatch = 0;
+    std::uint64_t relocLearnAttempts = 0, relocLearnEmpty = 0, relocBans = 0, relocStagesEmpty = 0;
     std::uint64_t stageDataHits = 0, stageDataWords = 0, stageDataVerified = 0, stageDataInserts = 0, stageDataPositions = 0;
     std::uint64_t recordWordsForwarded = 0, recordStagesRecompiled = 0, recordWordsRefused = 0, recordWordsVerified = 0;
     std::chrono::steady_clock::time_point lastReport = std::chrono::steady_clock::now();

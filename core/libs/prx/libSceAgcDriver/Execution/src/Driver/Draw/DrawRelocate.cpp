@@ -204,20 +204,30 @@ void Driver::learnPendingRelocation() {
     const auto pending = drawRelocationPending;
     drawRelocationPending = {};
     if (pending.key == 0) return;
+    ++drawEntryCounters.relocLearnAttempts;
     const auto inserted = drawCache.find(pending.key);
     std::shared_ptr<const DrawEntry> learned;
     if (inserted != drawCache.end() && inserted->second->decode != nullptr) learned = inserted->second;
     else if (const auto donor = pending.donor.lock(); donor != nullptr && donor->decode != nullptr) learned = donor;
-    if (learned == nullptr) return;
+    if (learned == nullptr) {
+        ++drawEntryCounters.relocLearnNull;
+        return;
+    }
     const auto& entry = *learned;
     const auto& programs = entry.decode->programs;
-    if (entry.stages.size() != programs.size()) return;
+    if (entry.stages.size() != programs.size()) {
+        ++drawEntryCounters.relocLearnMismatch;
+        return;
+    }
     const auto known = drawRelocations.find(pending.identity);
     auto shape = std::make_shared<DrawRelocation>();
     if (known != drawRelocations.end()) *shape = *known->second;
     bool changed = known == drawRelocations.end();
     for (std::size_t i = 0; i < programs.size(); ++i) {
-        if (entry.stages[i].empty()) continue;
+        if (entry.stages[i].empty()) {
+            ++drawEntryCounters.relocStagesEmpty;
+            continue;
+        }
         const auto& variant = *entry.stages[i].front();
         const auto& program = programs[i];
         for (std::uint32_t index = program.hiddenUserWords; index < program.userData.size() && index < 64; ++index) {
@@ -229,6 +239,7 @@ void Driver::learnPendingRelocation() {
                 if (held == shape->words.end()) continue;
                 shape->words.erase(held);
                 shape->banned.push_back(reg);
+                ++drawEntryCounters.relocBans;
                 changed = true;
                 continue;
             }
@@ -253,6 +264,7 @@ void Driver::learnPendingRelocation() {
         std::sort(shape->words.begin(), shape->words.end(), [](const RelocatableUserWord& a, const RelocatableUserWord& b) { return a.reg < b.reg; });
         drawEntryCounters.relocShapes += static_cast<std::uint64_t>(known == drawRelocations.end());
         drawEntryCounters.relocWords = shape->words.size();
+        drawEntryCounters.relocLearnEmpty += static_cast<std::uint64_t>(shape->words.empty());
         drawRelocations[pending.identity] = std::move(shape);
     }
     if (pending.alias == 0) return;
