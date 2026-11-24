@@ -204,8 +204,11 @@ void Driver::learnPendingRelocation() {
     drawRelocationPending = {};
     if (pending.key == 0) return;
     const auto inserted = drawCache.find(pending.key);
-    if (inserted == drawCache.end() || inserted->second->decode == nullptr) return;
-    const auto& entry = *inserted->second;
+    std::shared_ptr<const DrawEntry> learned;
+    if (inserted != drawCache.end() && inserted->second->decode != nullptr) learned = inserted->second;
+    else if (const auto donor = pending.donor.lock(); donor != nullptr && donor->decode != nullptr) learned = donor;
+    if (learned == nullptr) return;
+    const auto& entry = *learned;
     const auto& programs = entry.decode->programs;
     if (entry.stages.size() != programs.size()) return;
     const auto known = drawRelocations.find(pending.identity);
@@ -235,6 +238,7 @@ void Driver::learnPendingRelocation() {
                 word.reads.emplace_back(0, length);
                 word.high = program.userData[index + 1];
             }
+            if ((variant.decodePointerWords >> index & 1u) != 0 && index + 1 < program.userData.size()) word.high = program.userData[index + 1];
             const auto base = AlignedWord(program.userData[index]);
             for (std::size_t run = 0; run < variant.runs.size() && run < variant.runBases.size(); ++run) {
                 if (variant.runBases[run] != static_cast<std::int8_t>(index)) continue;
@@ -246,11 +250,14 @@ void Driver::learnPendingRelocation() {
     }
     if (changed) {
         std::sort(shape->words.begin(), shape->words.end(), [](const RelocatableUserWord& a, const RelocatableUserWord& b) { return a.reg < b.reg; });
+        drawEntryCounters.relocShapes += static_cast<std::uint64_t>(known == drawRelocations.end());
+        drawEntryCounters.relocWords = shape->words.size();
         drawRelocations[pending.identity] = std::move(shape);
     }
     if (pending.alias == 0) return;
     if (drawAliases.size() >= MaxAliases) drawRelocationCounters.evicted += dropEveryOther(drawAliases);
     drawAliases[pending.alias] = pending.key;
+    drawEntryCounters.relocAliases = drawAliases.size();
 }
 
 void Driver::relocateDrawEntry(const QueueState& queue, std::uint64_t alias, std::shared_ptr<DrawEntry>& entry, std::shared_ptr<const DrawDecode>& decode, std::vector<DrawUserPatch>& patches) {
@@ -307,6 +314,7 @@ void Driver::relocateDrawEntry(const QueueState& queue, std::uint64_t alias, std
             copy->valueSlots = variant->valueSlots;
             copy->calleeWords = variant->calleeWords;
             copy->calleeReads = variant->calleeReads;
+            copy->decodePointerWords = variant->decodePointerWords;
             copy->donor = variant->donor != nullptr ? variant->donor : variant;
             copy->words = variant->words;
             copy->forgetSerial = variant->forgetSerial;

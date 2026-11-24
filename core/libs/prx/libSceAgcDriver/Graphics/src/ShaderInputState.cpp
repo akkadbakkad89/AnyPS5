@@ -287,12 +287,13 @@ ShaderRecompiler::ShaderVertexStageInfo DecodeVertexStageInfo(std::span<const st
     info.fetchEmbedded = true;
     info.fetchAttribReg = static_cast<std::uint32_t>(vertexAttribReg);
     info.fetchBufferReg = static_cast<std::uint32_t>(vertexBufferReg);
-    const auto record = [&](std::uint64_t address, std::span<const std::byte> bytes) {
+    const auto record = [&](std::uint64_t address, std::span<const std::byte> bytes, std::int32_t word = -1) {
         if (reads == nullptr) return;
         auto& read = reads->emplace_back();
         read.address = address;
         std::copy(bytes.begin(), bytes.end(), read.data.begin());
         read.size = static_cast<std::uint32_t>(bytes.size());
+        read.word = word;
     };
     if (reads != nullptr) reads->reserve(reads->size() + 2u * shader.num_input_semantics);
     std::array<std::uint32_t, ShaderRecompiler::ShaderVertexStageInfo::MaxResources> attribWords{};
@@ -350,7 +351,7 @@ ShaderRecompiler::ShaderVertexStageInfo DecodeVertexStageInfo(std::span<const st
         std::array<std::byte, 4> attribWordBytes{};
         const auto attribWordAddress = attribTableAddr + static_cast<std::uint64_t>(semantic.semantic) * 4u;
         std::memcpy(attribWordBytes.data(), &attribWords[i], 4);
-        record(attribWordAddress, attribWordBytes);
+        record(attribWordAddress, attribWordBytes, static_cast<std::int32_t>(attribWord));
         const std::uint32_t attribWord = attribWords[i];
         const auto index = attribWord & 0x1fu;
         const auto format = (attribWord >> 5u) & 0x1ffu;
@@ -360,7 +361,7 @@ ShaderRecompiler::ShaderVertexStageInfo DecodeVertexStageInfo(std::span<const st
         std::array<std::byte, 16> sharpBytes{};
         const auto sharpAddress = bufferTableAddr + static_cast<std::uint64_t>(index) * 16u;
         std::memcpy(sharpBytes.data(), sharpWords[i].data(), 16);
-        record(sharpAddress, sharpBytes);
+        record(sharpAddress, sharpBytes, static_cast<std::int32_t>(bufferWord));
         std::array<std::uint32_t, 4> sharp{};
         std::memcpy(sharp.data(), sharpBytes.data(), 16);
         if (info.resourcesNum >= ShaderRecompiler::ShaderVertexStageInfo::MaxResources) throw std::runtime_error("AGC graphics: vertex resource count exceeds the supported domain");

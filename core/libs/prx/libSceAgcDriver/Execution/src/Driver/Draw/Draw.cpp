@@ -496,6 +496,7 @@ DrawVerdict Driver::draw(QueueState& queue, std::span<const std::uint32_t> packe
                 if (dataEntry != nullptr) {
                     ++drawEntryCounters.dataHits;
                     drawCacheUseful().fetch_add(1, std::memory_order_relaxed);
+                    drawRelocationPending.donor = dataEntry;
                 }
             }
         }
@@ -710,7 +711,7 @@ DrawVerdict Driver::draw(QueueState& queue, std::span<const std::uint32_t> packe
                 }
             }
         }
-        if (profile && drawRelocationCounters.lookups >= 100000) reportDrawRelocation();
+        if (profile && drawRelocationCounters.lookups >= 1000) reportDrawRelocation();
     }
     if (!userPatches.empty() && !drawHit) {
         auto current = std::make_shared<DrawDecode>(*decode);

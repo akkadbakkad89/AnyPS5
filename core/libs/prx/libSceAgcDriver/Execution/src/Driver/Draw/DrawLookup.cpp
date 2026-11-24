@@ -266,8 +266,25 @@ void Driver::lookupDraw(const Submission& submission, const std::shared_ptr<Vulk
                 for (const auto& variant : dataEntry->stages[i]) {
                     if (variant->registeredViews != nullptr && !CaptureRegisteredViewsCurrent(*variant->registeredViews)) continue;
                     bool usedEqual = true;
-                    for (std::size_t w = 0; w < now.size() && usedEqual; ++w) {
-                        if (now[w] != was[w] && (w >= 64u || ((variant->userDataMask >> w) & 1u) != 0)) usedEqual = false;
+                    const bool traceWords = traceDrawCache();
+                    for (std::size_t w = 0; w < now.size() && (usedEqual || traceWords); ++w) {
+                        if (now[w] == was[w]) continue;
+                        if (w < 64u && ((variant->userDataMask >> w) & 1u) == 0) {
+                            if (traceWords) ++drawEntryCounters.dataDiffUnused;
+                            continue;
+                        }
+                        usedEqual = false;
+                        if (!traceWords) break;
+                        if (w >= 64u) {
+                            ++drawEntryCounters.dataDiffBeyond;
+                            continue;
+                        }
+                        ++drawEntryCounters.dataDiffWords[w];
+                        const auto classes = (variant->relocatableWords | variant->valueWords | variant->calleeWords);
+                        if ((variant->relocatableWords >> w) & 1u) ++drawEntryCounters.dataDiffRelocatable;
+                        if ((variant->valueWords >> w) & 1u) ++drawEntryCounters.dataDiffValue;
+                        if ((variant->calleeWords >> w) & 1u) ++drawEntryCounters.dataDiffCallee;
+                        if (((classes >> w) & 1u) == 0) ++drawEntryCounters.dataDiffUnmarked;
                     }
                     if (!usedEqual) continue;
                     if ((i == 0 && variant->pushOffset != 0) || std::any_of(candidates.begin(), candidates.end(), [&](const auto& candidate) { return candidate.first->pushOffset == variant->pushOffset; })) continue;
